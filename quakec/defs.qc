@@ -572,6 +572,14 @@ float 	CS_MIXED		= 3; // can do ranged or melee equally.
 .float		fired_weapon;	// [NDS] haleyjd: if player has fired a weapon, for achievement
 .float		took_damage;	// [NDS] haleyjd: if player has taken damage, for achievement
 
+// Salbrox: Sulfur Exposure system
+.float		sulfur_exposure;		// 0.0 to 1.0 — current exposure level
+.float		exposure_nextvoice;		// time before next exposure voice line can play
+.float		exposure_nextcheck;		// throttle for passive exposure tick
+
+float		EXPOSURE_LOW	= 0.33;	// threshold: perception effects begin
+float		EXPOSURE_HIGH	= 0.66;	// threshold: Conduit charges, enemies aware
+
 //
 // object stuff
 //

@@ -702,6 +702,10 @@ void() PutClientInServer =
 	local	entity spot;
 
 	self.classname = "player";
+
+	// Salbrox: slightly slower than Quake (320) — more grounded, still snappy
+	cvar_set("sv_maxspeed", "270");
+
 	if (skill == 3 && !deathmatch)
 		self.health = 50;
 	else
@@ -726,6 +730,9 @@ void() PutClientInServer =
 	self.healthrot_nextcheck = 0;
 	self.fired_weapon = 0; // [NDS] haleyjd
 	self.took_damage = 0;  // [NDS] haleyjd
+	self.sulfur_exposure = 0;
+	self.exposure_nextvoice = 0;
+	self.exposure_nextcheck = 0;
 	self.team = TEAM_NONE;
 	
 	if ( coop ) { 
@@ -1045,11 +1052,11 @@ void() PlayerJump =
 	self.flags = self.flags - (self.flags & FL_JUMPRELEASED);
 
 	self.flags = self.flags - FL_ONGROUND;	// don't stairwalk
-	
+
 	self.button2 = 0;
 	// player jumping sound
 	sound (self, CHAN_BODY, "player/plyrjmp8.wav", 1, ATTN_NORM);
-	self.velocity_z = self.velocity_z + 270;
+	self.velocity_z = self.velocity_z + 230;	// Salbrox: reduced from 270, more grounded feel
 };
 
 
@@ -1418,6 +1425,68 @@ void CheckHealthRot() {
 
 /*
 ================
+UpdateSulfurExposure
+
+Called each frame from PlayerPostThink.
+Passively builds exposure over time when in sulfur zones (tagged via
+self.sulfur_zone set by trigger entities). Decays slowly elsewhere.
+Plays voice lines at thresholds.
+================
+*/
+void() UpdateSulfurExposure =
+{
+	if (self.health <= 0)
+		return;
+
+	// throttle to once per 0.5s
+	if (self.exposure_nextcheck > time)
+		return;
+	self.exposure_nextcheck = time + 0.5;
+
+	// passive decay when not in a sulfur zone
+	// sulfur_zone is set to time+N by trigger_sulfurzone entities (to be added)
+	if (self.sulfur_exposure > 0)
+		self.sulfur_exposure = self.sulfur_exposure - 0.01;
+
+	if (self.sulfur_exposure < 0)
+		self.sulfur_exposure = 0;
+
+	// clamp
+	if (self.sulfur_exposure > 1)
+		self.sulfur_exposure = 1;
+
+	// voice lines — only play if enough time has passed since last one
+	if (self.exposure_nextvoice > time)
+		return;
+
+	if (self.sulfur_exposure >= EXPOSURE_HIGH)
+	{
+		local float r;
+		r = random();
+		if (r < 0.33)
+			sprint(self, "Something's wrong with me.\n");
+		else if (r < 0.66)
+			sprint(self, "It's inside me now. Isn't it.\n");
+		else
+			sprint(self, "I can see-- I don't want to talk about what I can see.\n");
+		self.exposure_nextvoice = time + 20;
+	}
+	else if (self.sulfur_exposure >= EXPOSURE_LOW)
+	{
+		local float r2;
+		r2 = random();
+		if (r2 < 0.33)
+			sprint(self, "My eyes are watering. Not good.\n");
+		else if (r2 < 0.66)
+			sprint(self, "Can't breathe through my nose anymore.\n");
+		else
+			sprint(self, "Head's starting to pound.\n");
+		self.exposure_nextvoice = time + 25;
+	}
+};
+
+/*
+================
 PlayerPostThink
 
 Called every frame after physics are run
@@ -1458,6 +1527,7 @@ void() PlayerPostThink =
 
 	CheckPowerups();
 	CheckHealthRot();
+	UpdateSulfurExposure();
 };
 
 /*
