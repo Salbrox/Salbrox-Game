@@ -297,6 +297,90 @@ void() W_FireShotgun =
 
 /*
 ================
+W_FireCompressionPistol
+
+Close-range pressure burst. Damage and knockback scale with charge
+(time since last fire). Hard range cap — falls off sharply past
+PISTOL_MAX_RANGE and hits nothing beyond PISTOL_HARD_RANGE.
+================
+*/
+void() W_FireCompressionPistol =
+{
+	local float charge, damage, knockback, dist, range_frac;
+	local vector dir, src;
+
+	// calculate charge 0.0-1.0 based on time since last shot
+	charge = (time - self.pistol_last_fired) / PISTOL_COOLDOWN;
+	if (charge > 1)
+		charge = 1;
+
+	// apply minimum charge floor so instant fire still does something
+	charge = PISTOL_MIN_CHARGE + charge * (1 - PISTOL_MIN_CHARGE);
+
+	damage    = PISTOL_MAX_DAMAGE * charge;
+	knockback = PISTOL_MAX_KNOCKBACK * charge;
+
+	self.pistol_last_fired = time;
+
+	// recoil scales with charge
+	self.punchangle_x = -1 - (charge * 3);
+
+	// sound — full charge gets a deep thump, low charge a weak pfft
+	if (charge > 0.85)
+		sound(self, CHAN_WEAPON, "weapons/grenade.wav", 1, ATTN_NORM);
+	else
+		sound(self, CHAN_WEAPON, "weapons/rocket1i.wav", 1, ATTN_NORM);
+
+	makevectors(self.v_angle);
+	src = self.origin + v_forward * 10;
+	src_z = self.absmin_z + self.size_z * 0.7;
+
+	dir = aim(self, 100000);
+	// hard range cap — pressure dissipates, can't hit past 300 units
+	traceline(src, src + dir * 300, FALSE, self);
+
+	if (trace_fraction != 1.0)
+	{
+		if (trace_ent.takedamage)
+		{
+			local entity hit;
+			hit = trace_ent;
+
+			// range falloff: full damage up to 150 units, fades to 0 at 300
+			dist = vlen(trace_endpos - src);
+			if (dist < 150)
+				range_frac = 1.0;
+			else
+				range_frac = 1.0 - ((dist - 150) / 150);
+
+			damage    = damage * range_frac;
+			knockback = knockback * range_frac;
+
+			SpawnBlood(trace_endpos, dir * -50, damage);
+			T_Damage(hit, self, self, damage);
+
+			if (hit.health > 0)
+			{
+				// force physics so velocity actually applies
+				hit.movetype = MOVETYPE_TOSS;
+				hit.flags = hit.flags - (hit.flags & FL_ONGROUND);
+				// horizontal push + upward kick to get off ground
+				hit.velocity = dir * knockback + '0 0 180';
+			}
+		}
+		else
+		{
+			WriteByte(MSG_BROADCAST, SVC_TEMPENTITY);
+			WriteByte(MSG_BROADCAST, TE_GUNSHOT);
+			WriteCoord(MSG_BROADCAST, trace_endpos_x);
+			WriteCoord(MSG_BROADCAST, trace_endpos_y);
+			WriteCoord(MSG_BROADCAST, trace_endpos_z);
+		}
+	}
+};
+
+/*
+================
 W_FireSuperShotgun
 ================
 */
@@ -787,8 +871,8 @@ void() W_SetCurrentAmmo =
 	
 	if (self.weapon == IT_AXE)
 	{
-		self.currentammo = 0;
-		self.weaponmodel = "progs/v_axe.mdl";
+		self.currentammo = self.ammo_pressure;
+		self.weaponmodel = "progs/v_rock.mdl";	// placeholder until we have a model
 	}
 	else if (self.weapon == IT_SHOTGUN)
 	{
@@ -926,18 +1010,9 @@ void() W_Attack =
 
 	if (self.weapon == IT_AXE)
 	{
-		sound (self, CHAN_WEAPON, "weapons/ax1.wav", 1, ATTN_NORM);
-		//stuffcmd (self, "vibrate tactile/weapons/ax1.bnvib");
-		r = random();
-		if (r < 0.25)
-			player_axe1 ();
-		else if (r<0.5)
-			player_axeb1 ();
-		else if (r<0.75)
-			player_axec1 ();
-		else
-			player_axed1 ();
-		self.attack_finished = time + 0.5;
+		player_shot1 ();
+		W_FireCompressionPistol ();
+		self.attack_finished = time + 0.15;	// short lockout — charge system throttles power
 	}
 	else if (self.weapon == IT_SHOTGUN)
 	{

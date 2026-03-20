@@ -580,6 +580,15 @@ float 	CS_MIXED		= 3; // can do ranged or melee equally.
 float		EXPOSURE_LOW	= 0.33;	// threshold: perception effects begin
 float		EXPOSURE_HIGH	= 0.66;	// threshold: Conduit charges, enemies aware
 
+// Salbrox: Compression Pistol
+.float		ammo_pressure;			// Compression Pistol ammo
+.float		pistol_last_fired;		// time of last fire, used to calculate charge
+
+float		PISTOL_COOLDOWN		= 1.5;	// seconds to reach full charge
+float		PISTOL_MIN_CHARGE	= 0.3;	// charge floor on instant fire (30%)
+float		PISTOL_MAX_DAMAGE	= 10;	// damage at full charge — weak fallback weapon
+float		PISTOL_MAX_KNOCKBACK	= 280;	// knockback velocity at full charge
+
 //
 // object stuff
 //
