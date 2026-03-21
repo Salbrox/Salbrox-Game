@@ -297,11 +297,29 @@ void() W_FireShotgun =
 
 /*
 ================
+GetPistolCharge
+
+Returns the current charge ratio [0.0, 1.0] based on time elapsed
+since the last shot. 1.0 = fully charged. Does NOT apply the minimum
+charge floor — callers that need it should apply PISTOL_MIN_CHARGE.
+================
+*/
+float() GetPistolCharge =
+{
+	local float charge;
+	charge = (time - self.pistol_last_fired) / PISTOL_COOLDOWN;
+	if (charge > 1)
+		charge = 1;
+	return charge;
+};
+
+/*
+================
 W_FireCompressionPistol
 
 Close-range pressure burst. Damage and knockback scale with charge
-(time since last fire). Hard range cap — falls off sharply past
-PISTOL_MAX_RANGE and hits nothing beyond PISTOL_HARD_RANGE.
+(time since last fire). Full damage up to PISTOL_MAX_RANGE units,
+fading to zero at PISTOL_HARD_RANGE. Nothing beyond PISTOL_HARD_RANGE.
 ================
 */
 void() W_FireCompressionPistol =
@@ -309,12 +327,8 @@ void() W_FireCompressionPistol =
 	local float charge, damage, knockback, dist, range_frac;
 	local vector dir, src;
 
-	// calculate charge 0.0-1.0 based on time since last shot
-	charge = (time - self.pistol_last_fired) / PISTOL_COOLDOWN;
-	if (charge > 1)
-		charge = 1;
-
-	// apply minimum charge floor so instant fire still does something
+	// raw charge 0-1, then apply floor so instant fire still does something
+	charge = GetPistolCharge();
 	charge = PISTOL_MIN_CHARGE + charge * (1 - PISTOL_MIN_CHARGE);
 
 	damage    = PISTOL_MAX_DAMAGE * charge;
@@ -331,13 +345,13 @@ void() W_FireCompressionPistol =
 	else
 		sound(self, CHAN_WEAPON, "weapons/rocket1i.wav", 1, ATTN_NORM);
 
-	makevectors(self.v_angle);
+	// v_forward already set by W_Attack; src_z raised to approximate eye height
 	src = self.origin + v_forward * 10;
 	src_z = self.absmin_z + self.size_z * 0.7;
 
 	dir = aim(self, 100000);
-	// hard range cap — pressure dissipates, can't hit past 300 units
-	traceline(src, src + dir * 300, FALSE, self);
+	// hard range cap — pressure dissipates beyond PISTOL_HARD_RANGE
+	traceline(src, src + dir * PISTOL_HARD_RANGE, FALSE, self);
 
 	if (trace_fraction != 1.0)
 	{
@@ -346,12 +360,14 @@ void() W_FireCompressionPistol =
 			local entity hit;
 			hit = trace_ent;
 
-			// range falloff: full damage up to 150 units, fades to 0 at 300
+			// range falloff: full damage within PISTOL_MAX_RANGE, fades to 0 at PISTOL_HARD_RANGE
 			dist = vlen(trace_endpos - src);
-			if (dist < 150)
+			if (dist < PISTOL_MAX_RANGE)
 				range_frac = 1.0;
 			else
-				range_frac = 1.0 - ((dist - 150) / 150);
+				range_frac = 1.0 - ((dist - PISTOL_MAX_RANGE) / (PISTOL_HARD_RANGE - PISTOL_MAX_RANGE));
+			if (range_frac < 0)
+				range_frac = 0;
 
 			damage    = damage * range_frac;
 			knockback = knockback * range_frac;
@@ -871,8 +887,8 @@ void() W_SetCurrentAmmo =
 	
 	if (self.weapon == IT_AXE)
 	{
-		self.currentammo = self.ammo_pressure;
-		self.weaponmodel = "progs/v_rock.mdl";	// placeholder until we have a model
+		self.currentammo = 0;	// PlayerPostThink updates this with live charge (0-100)
+		self.weaponmodel = "progs/v_rock.mdl";	// TODO: replace with compression pistol model
 	}
 	else if (self.weapon == IT_SHOTGUN)
 	{
@@ -1010,9 +1026,10 @@ void() W_Attack =
 
 	if (self.weapon == IT_AXE)
 	{
+		self.fired_weapon = 1;
 		player_shot1 ();
 		W_FireCompressionPistol ();
-		self.attack_finished = time + 0.15;	// short lockout — charge system throttles power
+		self.attack_finished = time + 0.3;
 	}
 	else if (self.weapon == IT_SHOTGUN)
 	{

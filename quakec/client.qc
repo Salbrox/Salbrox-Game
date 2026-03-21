@@ -733,8 +733,7 @@ void() PutClientInServer =
 	self.sulfur_exposure = 0;
 	self.exposure_nextvoice = 0;
 	self.exposure_nextcheck = 0;
-	self.ammo_pressure = 25;
-	self.pistol_last_fired = 0;	// 0 means full charge on first shot
+	self.pistol_last_fired = time - PISTOL_COOLDOWN;	// start fully charged
 	self.team = TEAM_NONE;
 	
 	if ( coop ) { 
@@ -1533,13 +1532,7 @@ void() PlayerPostThink =
 
 	// Compression Pistol: show charge level in ammo counter (0-100)
 	if (self.weapon == IT_AXE)
-	{
-		local float charge;
-		charge = (time - self.pistol_last_fired) / PISTOL_COOLDOWN;
-		if (charge > 1)
-			charge = 1;
-		self.currentammo = floor(charge * 100);
-	}
+		self.currentammo = floor(GetPistolCharge() * 100);
 };
 
 /*
